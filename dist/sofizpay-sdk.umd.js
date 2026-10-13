@@ -1,8 +1,8 @@
 (function (global, factory) {
-  typeof exports === 'object' && typeof module !== 'undefined' ? module.exports = factory(require('stellar-sdk'), require('axios'), require('node-forge')) :
-  typeof define === 'function' && define.amd ? define(['stellar-sdk', 'axios', 'node-forge'], factory) :
-  (global = typeof globalThis !== 'undefined' ? globalThis : global || self, global.SofizPaySDK = factory(global.StellarSdk, global.axios, global.forge));
-})(this, (function (StellarSdk, axios, forge) { 'use strict';
+  typeof exports === 'object' && typeof module !== 'undefined' ? module.exports = factory(require('stellar-sdk'), require('axios'), require('https'), require('node-forge')) :
+  typeof define === 'function' && define.amd ? define(['stellar-sdk', 'axios', 'https', 'node-forge'], factory) :
+  (global = typeof globalThis !== 'undefined' ? globalThis : global || self, global.SofizPaySDK = factory(global.StellarSdk, global.axios, global.https, global.forge));
+})(this, (function (StellarSdk, axios, https, forge) { 'use strict';
 
   function _interopNamespaceDefault(e) {
     var n = Object.create(null);
@@ -27,14 +27,24 @@
 
   const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
+  // Use a dedicated Agent to keep TLS sockets alive efficiently without dropping them.
+  // This skips the ~200ms SSL handshake overhead on every single API page fetch!
+  const stellarHttpsAgent = new https.Agent({ keepAlive: true, keepAliveMsecs: 3000, maxSockets: 10 });
+
   const fetchWithRetry = async (url, retries = 3, delay = 1000) => {
     for (let i = 0; i < retries; i++) {
       try {
-        const response = await axios.get(url);
+        const response = await axios.get(url, {
+          httpsAgent: stellarHttpsAgent,
+          timeout: 10000 // 10s timeout
+        });
         return response.data;
       } catch (error) {
-        if (error.response && error.response.status === 429 && i < retries - 1) {
-          console.warn(`Retrying request... (${i + 1}/${retries})`);
+        const isRateLimit = error.response && error.response.status === 429;
+        const isNetworkError = !error.response; // e.g., ECONNRESET, ENOTFOUND, Timeout
+        
+        if ((isRateLimit || isNetworkError) && i < retries - 1) {
+          console.warn(`[Network/RateLimit] Retrying request... (${i + 1}/${retries})`);
           await sleep(delay);
         } else {
           throw error;
@@ -312,54 +322,85 @@
     }
   };
 
-  const getTransactions = async (publicKey, limit = 200,cursor = null) => {
+  const getTransactions = async (publicKey, limit = null, cursor = null) => {
+    const DZT_ISSUER = 'GCAZI7YBLIDJWIVEL7ETNAZGPP3LC24NO6KAOBWZHUERXQ7M5BC52DLV';
+    const PAGE_SIZE = limit && limit < 200 ? limit : 200;
+
     try {
-      const query = await server.transactions()
-        .forAccount(publicKey)
-        .order('desc')
-        .limit(limit);
+      const allFilteredTransactions = [];
+      let currentCursor = cursor || '';
+      let hasMore = true;
 
-      // إذا كان هناك cursor، استخدمه للبدء من تلك النقطة
-      if (cursor) {
-        query.cursor(cursor);
-      }
+      while (hasMore) {
+        // ── Comprehensive & Hyper-fast: fetch all OPERATIONS with transaction details in one go ──
+        const url = `https://horizon.stellar.org/accounts/${publicKey}/operations?limit=${PAGE_SIZE}&order=desc&join=transactions${currentCursor ? `&cursor=${currentCursor}` : ''}`;
+        
+        const response = await fetchWithRetry(url, 3, 500); 
+        const records = response._embedded.records;
+        
+        if (!records || records.length === 0) {
+          break;
+        }
 
-      const transactions = await query.call();
+        for (const op of records) {
+          let txData = {
+            id: op.transaction_hash,
+            hash: op.transaction_hash,
+            created_at: op.created_at,
+            memo: op.transaction ? (op.transaction.memo || '') : '',
+            successful: op.transaction ? op.transaction.successful : true,
+            paging_token: op.paging_token,
+          };
 
-
-      const filteredTransactions = [];
-      
-      for (const tx of transactions.records) {
-        try {
-          const operations = await server.operations()
-            .forTransaction(tx.id)
-            .call();
-          for (const op of operations.records) {
-            if (op.type === 'payment' && 
-                op.asset_code === 'DZT' && 
-                op.asset_issuer === 'GCAZI7YBLIDJWIVEL7ETNAZGPP3LC24NO6KAOBWZHUERXQ7M5BC52DLV') {
-              
-              filteredTransactions.push({
-                id: tx.id,
-                hash: tx.hash,
-                created_at: tx.created_at,
-                memo: tx.memo || '',
-                amount: op.amount,
-                from: op.from,
-                to: op.to,
-                paging_token: tx.paging_token, // مهم: احصل على الـ token لكل معاملة
-                type: op.from === publicKey ? 'sent' : 'received',
-                asset_code: op.asset_code,
-                asset_issuer: op.asset_issuer
-              });
-            }
+          // 1. Handle Payments (Direct & Path)
+          if ((op.type === 'payment' || op.type === 'path_payment_strict_receive' || op.type === 'path_payment_strict_send') && 
+              op.asset_code === 'DZT' && op.asset_issuer === DZT_ISSUER) {
+            
+            txData.type = op.from === publicKey ? 'sent' : 'received';
+            txData.amount = op.amount;
+            txData.from = op.from;
+            txData.to = op.to || op.destination;
+            txData.asset_code = op.asset_code;
+            txData.asset_issuer = op.asset_issuer;
+            txData.category = 'payment';
+            
+            allFilteredTransactions.push(txData);
           }
-        } catch (opError) {
-          console.error('Error fetching operations for transaction:', tx.id, opError);
+          // 2. Handle Trustline (DZT)
+          else if (op.type === 'change_trust' && op.asset_code === 'DZT' && op.asset_issuer === DZT_ISSUER) {
+            txData.type = 'trustline';
+            txData.category = 'setup';
+            txData.asset_code = op.asset_code;
+            txData.amount = '0'; // Trustlines don't transfer value
+            allFilteredTransactions.push(txData);
+          }
+          // 3. Handle Account Creation
+          else if (op.type === 'create_account' && op.account === publicKey) {
+            txData.type = 'account_created';
+            txData.category = 'setup';
+            txData.amount = op.starting_balance;
+            txData.from = op.funder || op.source_account;
+            txData.asset_code = 'XLM';
+            allFilteredTransactions.push(txData);
+          }
+
+          if (limit && allFilteredTransactions.length >= limit) {
+            hasMore = false;
+            break;
+          }
+        }
+
+        if (!hasMore) break;
+
+        if (records.length < PAGE_SIZE) {
+          hasMore = false;
+        } else {
+          currentCursor = records[records.length - 1].paging_token;
         }
       }
-      
-      return filteredTransactions;
+
+      return allFilteredTransactions;
+
     } catch (error) {
       console.error('Error fetching transactions:', error);
       throw error;
@@ -484,8 +525,9 @@
   };
 
   class SofizPaySDK {
-    constructor() {
+    constructor(isSandbox = false) {
       this.version = '1.1.11';
+      this.isSandbox = isSandbox;
       this.activeStreams = new Map();
       this.transactionCallbacks = new Map();
       this.streamCloseFunctions = new Map(); 
@@ -536,7 +578,7 @@
       }
     }
 
-    async getTransactions(publicKey, limit = 50,cursor = null) {
+    async getTransactions(publicKey, limit = null, cursor = null) {
       if (!publicKey) {
         throw new Error('public Key is required.');
       }
@@ -923,7 +965,47 @@
       }
     }
 
+    /**
+     * Initiate a CIB / EDAHABIA payment gateway transaction
+     * @param {Object} transactionData - Transaction details
+     * @param {string} transactionData.account - SofizPay account / public key
+     * @param {number} transactionData.amount - Payment amount in DZD
+     * @param {string} transactionData.full_name - Customer's full name
+     * @param {string} transactionData.phone - Customer's phone number
+     * @param {string} transactionData.email - Customer's email address
+     * @param {string} [transactionData.return_url] - Redirect URL after payment
+     * @param {string} [transactionData.webhook_url] - Async webhook notification URL (HTTP/HTTPS)
+     * @param {string} [transactionData.invoice_id] - Optional merchant invoice identifier
+     * @param {string} [transactionData.language] - Gateway language ('ar' | 'en' | 'fr')
+     * @param {string} [transactionData.memo] - Payment description / note
+     * @param {string|boolean} [transactionData.redirect] - 'yes' | 'no'
+     * @param {string|boolean} [transactionData.keep_return_url] - 'True' | 'False'
+     * @param {boolean} [transactionData.is_sandbox] - Use sandbox environment
+     * @param {boolean} [transactionData.isSandbox] - Alias for is_sandbox
+     * @returns {Promise<Object>}
+     */
     async makeCIBTransaction(transactionData) {
+      const isSandbox = Boolean(
+        transactionData?.is_sandbox !== undefined ? transactionData.is_sandbox :
+        transactionData?.isSandbox !== undefined ? transactionData.isSandbox :
+        this.isSandbox
+      );
+      return this._makeCIBRequest(transactionData, isSandbox);
+    }
+
+    /**
+     * Initiate a CIB transaction specifically in Sandbox mode.
+     * @param {Object} transactionData 
+     * @returns {Promise<Object>}
+     */
+    async makeSandboxCIBTransaction(transactionData) {
+      return this._makeCIBRequest(transactionData, true);
+    }
+
+    async _makeCIBRequest(transactionData, useSandbox) {
+      if (!transactionData) {
+        throw new Error('Transaction data is required.');
+      }
       if (!transactionData.account) {
         throw new Error('Account is required.');
       }
@@ -941,7 +1023,10 @@
       }
 
       try {
-        const baseUrl = 'https://www.sofizpay.com/make-cib-transaction/';
+        const isSandbox = Boolean(useSandbox !== undefined ? useSandbox : this.isSandbox);
+        const baseUrl = isSandbox 
+          ? 'https://sofizpay.com/sandbox/make-cib-transaction/'
+          : 'https://www.sofizpay.com/make-cib-transaction/';
         const params = new URLSearchParams();
         
         params.append('account', transactionData.account);
@@ -953,11 +1038,27 @@
         if (transactionData.return_url) {
           params.append('return_url', transactionData.return_url);
         }
+        if (transactionData.webhook_url) {
+          params.append('webhook_url', transactionData.webhook_url);
+        }
+        if (transactionData.invoice_id) {
+          params.append('invoice_id', transactionData.invoice_id);
+        }
+        if (transactionData.language) {
+          params.append('language', transactionData.language);
+        }
         if (transactionData.memo) {
           params.append('memo', transactionData.memo);
         }
         if (transactionData.redirect !== undefined) {
-          params.append('redirect', transactionData.redirect);
+          params.append('redirect', typeof transactionData.redirect === 'boolean'
+            ? (transactionData.redirect ? 'yes' : 'no')
+            : transactionData.redirect);
+        }
+        if (transactionData.keep_return_url !== undefined) {
+          params.append('keep_return_url', typeof transactionData.keep_return_url === 'boolean'
+            ? (transactionData.keep_return_url ? 'True' : 'False')
+            : transactionData.keep_return_url);
         }
 
         const fullUrl = `${baseUrl}?${params.toString()}`;
@@ -968,20 +1069,38 @@
             'Content-Type': 'application/json'
           }
         });
+
+        const responseData = response.data;
+        const paymentUrl = responseData?.payment_url || responseData?.cib_response?.formUrl || null;
+
         return {
-          success: true,
-          data: response.data,
+          success: responseData?.status !== 'error' && responseData?.success !== false,
+          data: responseData,
+          payment_url: paymentUrl,
+          transaction_id: responseData?.transaction_id || null,
+          cib_transaction_id: responseData?.cib_transaction_id || null,
+          order_id: responseData?.order_id || null,
+          webhook_url: responseData?.webhook_url || transactionData.webhook_url || null,
+          account: transactionData.account,
+          amount: transactionData.amount,
+          full_name: transactionData.full_name,
+          phone: transactionData.phone,
+          email: transactionData.email,
+          memo: transactionData.memo,
+          is_sandbox: isSandbox,
           timestamp: new Date().toISOString()
         };
       } catch (error) {
         console.error('Error making CIB transaction:', error);
         
         let errorMessage = error.message;
+        let errorData = null;
         
         if (error.response) {
+          errorData = error.response.data;
           errorMessage = `HTTP Error: ${error.response.status} - ${error.response.statusText}`;
-          if (error.response.data && error.response.data.error) {
-            errorMessage += ` - ${error.response.data.error}`;
+          if (error.response.data && (error.response.data.message || error.response.data.error)) {
+            errorMessage += ` - ${error.response.data.message || error.response.data.error}`;
           }
         } else if (error.request) {
           errorMessage = 'Network error: No response received from server';
@@ -992,6 +1111,7 @@
         return {
           success: false,
           error: errorMessage,
+          errorData: errorData,
           account: transactionData.account,
           amount: transactionData.amount,
           timestamp: new Date().toISOString()
@@ -1057,7 +1177,7 @@
      */
     async getOperationDetails(operationId, encryptedSecretKey) {
       try {
-        const response = await axios.get(`https://www.sofizpay.com/operation-details/${operationId}/`, {
+        const response = await axios.get(`https://sofizpay.com/services/operation-detail/${operationId}/`, {
           params: { encrypted_sk: encryptedSecretKey }
         });
         return {
@@ -1120,11 +1240,30 @@
 
     /**
      * Check status of a CIB transaction (Sandbox/Prod)
-     * @param {string} orderNumber 
+     * @param {string} cibTransactionId 
+     * @param {boolean} [isSandbox] - Explicit sandbox override
      */
-    async checkCIBStatus(cibTransactionId) {
+    async checkCIBStatus(cibTransactionId, isSandbox) {
+      const useSandbox = Boolean(isSandbox !== undefined ? isSandbox : this.isSandbox);
+      return this._checkCIBStatusRequest(cibTransactionId, useSandbox);
+    }
+
+    /**
+     * Check status of a CIB transaction specifically in Sandbox mode.
+     * @param {string} cibTransactionId 
+     * @returns {Promise<Object>}
+     */
+    async checkSandboxCIBStatus(cibTransactionId) {
+      return this.checkCIBStatus(cibTransactionId, true);
+    }
+
+    async _checkCIBStatusRequest(cibTransactionId, useSandbox) {
       try {
-        const response = await axios.get('https://www.sofizpay.com/cib-transaction-check/', {
+        const baseUrl = useSandbox
+          ? 'https://sofizpay.com/sandbox/cib-transaction-check/'
+          : 'https://www.sofizpay.com/cib-transaction-check/';
+          
+        const response = await axios.get(baseUrl, {
           params: { order_number: cibTransactionId }
         });
         return {
@@ -1156,11 +1295,25 @@
       };
     }
 
-    verifySignature(verificationData) {
-      if (!verificationData.message) {
-        return false;
+    /**
+     * Verify digital RSA signature of a callback / webhook notification
+     * @param {Object|string} verificationData - Payload object or message string
+     * @param {string} [signature] - Signature string if verificationData is message
+     * @returns {boolean} - True if signature is valid
+     */
+    verifySignature(verificationData, signature) {
+      let message = '';
+      let sig = '';
+
+      if (typeof verificationData === 'string') {
+        message = verificationData;
+        sig = signature || '';
+      } else if (verificationData && typeof verificationData === 'object') {
+        message = verificationData.message || '';
+        sig = verificationData.signature_url_safe || verificationData.signature || '';
       }
-      if (!verificationData.signature_url_safe) {
+
+      if (!message || !sig) {
         return false;
       }
 
@@ -1175,7 +1328,7 @@ THV3WRcKrP2krz3ruRGF6yP6PVHEuPc0YDLsYjV5uhfs7JtIksNKhRRAQ16bAsj/
 -----END PUBLIC KEY-----`;
 
       try {
-        let base64 = verificationData.signature_url_safe
+        let base64 = sig
           .replace(/-/g, '+')
           .replace(/_/g, '/');
         
@@ -1184,18 +1337,24 @@ THV3WRcKrP2krz3ruRGF6yP6PVHEuPc0YDLsYjV5uhfs7JtIksNKhRRAQ16bAsj/
         }
         
         const signatureBytes = forge.util.decode64(base64);
-        
         const publicKey = forge.pki.publicKeyFromPem(publicKeyPem);
-        
         const md = forge.md.sha256.create();
-        md.update(verificationData.message, 'utf8');
+        md.update(message, 'utf8');
         
         return publicKey.verify(md.digest().bytes(), signatureBytes);
-        
       } catch (error) {
         console.error('Signature verification error:', error);
         return false;
       }
+    }
+
+    /**
+     * Helper method specifically to verify incoming webhook payloads
+     * @param {Object} webhookPayload - Webhook payload object containing message and signature
+     * @returns {boolean} - True if signature is valid
+     */
+    verifyWebhookSignature(webhookPayload) {
+      return this.verifySignature(webhookPayload);
     }
   }
 

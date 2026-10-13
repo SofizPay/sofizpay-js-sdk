@@ -338,49 +338,138 @@ const details = await sdk.getOperationDetails('OPERATION_ID', 'USER_ENCRYPTED_SK
 
 ---
 
-## 🏦 Bank Integration (CIB)
+## 🏦 Bank Integration (CIB & EDAHABIA)
 
-Generate a secure Dahabia/CIB bank payment link. The user is redirected to a hosted payment page.
+Generate a secure Dahabia/CIB bank payment link with optional webhook callback. The user is redirected to a hosted payment page.
 
 ```javascript
 const result = await sdk.makeCIBTransaction({
-  account:    'YOUR_STELLAR_PUBLIC_KEY',    // Your SofizPay account
-  amount:     2500,                          // Amount in DZT
-  full_name:  'Ahmed Benali',
-  phone:      '0661234567',
-  email:      'ahmed@example.com',
-  memo:       'Order #789',                  // Optional
-  return_url: 'https://yoursite.com/callback', // Optional redirect
-  redirect:   'no'                           // 'yes' for auto-redirect
+  account:     'YOUR_STELLAR_PUBLIC_KEY',     // Your SofizPay account
+  amount:      2500,                           // Amount in DZD
+  full_name:   'Ahmed Benali',
+  phone:       '0661234567',
+  email:       'ahmed@example.com',
+  memo:        'Order #789',                   // Optional
+  return_url:  'https://yoursite.com/callback', // Optional customer redirect
+  webhook_url: 'https://yoursite.com/api/cib-webhook', // Optional async server webhook URL
+  redirect:    'no'                            // 'yes' for auto-redirect
 });
 
 if (result.success) {
   // Redirect user to payment page
-  window.location.href = result.url;
+  window.location.href = result.payment_url;
+  console.log('CIB Transaction ID:', result.cib_transaction_id);
 }
 ```
 
-### 🧪 Sandbox Environment
+### 🧪 Sandbox Environment & Webhook Testing
 
-For safe testing without real money, use the dedicated sandbox methods. These methods always point to the SofizPay Sandbox environment.
+For safe testing without real money, use the dedicated sandbox methods. These methods connect to the SofizPay Sandbox environment (`https://sofizpay.com/sandbox/`).
 
 ```javascript
-// 1. Generate a sandbox payment link
+// 1. Generate a sandbox payment link with webhook
 const result = await sdk.makeSandboxCIBTransaction({
-  account:   'YOUR_PUBLIC_KEY',
-  amount:    150.0,
-  full_name: 'Sandbox Tester',
-  phone:     '0555000000',
-  email:     'sandbox@example.com'
+  account:     'YOUR_PUBLIC_KEY',
+  amount:      150.0,
+  full_name:   'Sandbox Tester',
+  phone:       '0555000000',
+  email:       'sandbox@example.com',
+  webhook_url: 'https://yoursite.com/api/cib-webhook'
 });
 
 if (result.success) {
-  console.log('Sandbox URL:', result.url);
-  const cibId = result.data.cib_transaction_id;
+  console.log('Sandbox Payment URL:', result.payment_url);
+  const cibId = result.cib_transaction_id;
 
   // 2. Check sandbox status
   const status = await sdk.checkSandboxCIBStatus(cibId);
-  console.log('Sandbox Status:', status.data.status);
+  console.log('Sandbox Status:', status.data);
+}
+```
+
+---
+
+## 🔔 Webhooks & Signature Verification
+
+When a CIB/EDAHABIA payment succeeds or fails (both in Production and Sandbox), SofizPay sends an HTTP POST notification to your registered `webhook_url`.
+
+### Webhook Event Payload
+
+```json
+{
+  "event": "cib.payment.updated",
+  "payment_status": "success",
+  "transaction_id": "bb979126-4e55-49dd-8ecc-a1d59867d2b0",
+  "cib_transaction_id": "5965287001",
+  "order_id": "satim_order_a1b2c3d4",
+  "order_number": 5965287001,
+  "order_status": 2,
+  "amount": 150000,
+  "currency": "012",
+  "error_code": null,
+  "error_message": null,
+  "action_code": null,
+  "action_code_description": null,
+  "resp_code": "00",
+  "resp_code_desc": "Approved",
+  "message": "https://yoursite.com/api/cib-webhook/success1500005965287001",
+  "signature": "MEQCIFz8v982hfkjdsf983274hfkjsdf...=="
+}
+```
+
+### Verifying Webhook Signatures
+
+Always verify the RSA SHA-256 digital signature to guarantee the request originated from SofizPay:
+
+#### Express.js Example:
+
+```javascript
+import express from 'express';
+import SofizPaySDK from 'sofizpay-sdk-js';
+
+const app = express();
+const sdk = new SofizPaySDK();
+
+app.post('/api/cib-webhook', express.json(), (req, res) => {
+  const payload = req.body;
+
+  // Verify the digital signature
+  const isValid = sdk.verifyWebhookSignature(payload);
+  if (!isValid) {
+    return res.status(400).send('Invalid signature');
+  }
+
+  if (payload.payment_status === 'success') {
+    console.log(`Payment confirmed for Order: ${payload.order_number}`);
+    // Update order status in your database
+  } else {
+    console.log(`Payment declined: ${payload.resp_code_desc}`);
+  }
+
+  res.status(200).send('OK');
+});
+```
+
+#### Next.js Route Handler Example (App Router):
+
+```javascript
+import { NextResponse } from 'next/server';
+import SofizPaySDK from 'sofizpay-sdk-js';
+
+const sdk = new SofizPaySDK();
+
+export async function POST(request) {
+  const payload = await request.json();
+
+  if (!sdk.verifyWebhookSignature(payload)) {
+    return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
+  }
+
+  if (payload.payment_status === 'success') {
+    // Fulfill customer order
+  }
+
+  return NextResponse.json({ received: true });
 }
 ```
 

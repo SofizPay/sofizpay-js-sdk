@@ -23,6 +23,9 @@
   "scripts": {
     "build": "rollup -c",
     "dev": "rollup -c -w",
+    "test": "node test_all_functions.js",
+    "test:all": "node test_all_functions.js",
+    "test:sandbox": "node test_sandbox.js",
     "update-version": "chmod +x scripts/update-version.sh && ./scripts/update-version.sh patch",
     "release": "npm run update-version && npm run build && npm publish"
   },

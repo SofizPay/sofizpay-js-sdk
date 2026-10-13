@@ -443,8 +443,32 @@ class SofizPaySDK {
     }
   }
 
+  /**
+   * Initiate a CIB / EDAHABIA payment gateway transaction
+   * @param {Object} transactionData - Transaction details
+   * @param {string} transactionData.account - SofizPay account / public key
+   * @param {number} transactionData.amount - Payment amount in DZD
+   * @param {string} transactionData.full_name - Customer's full name
+   * @param {string} transactionData.phone - Customer's phone number
+   * @param {string} transactionData.email - Customer's email address
+   * @param {string} [transactionData.return_url] - Redirect URL after payment
+   * @param {string} [transactionData.webhook_url] - Async webhook notification URL (HTTP/HTTPS)
+   * @param {string} [transactionData.invoice_id] - Optional merchant invoice identifier
+   * @param {string} [transactionData.language] - Gateway language ('ar' | 'en' | 'fr')
+   * @param {string} [transactionData.memo] - Payment description / note
+   * @param {string|boolean} [transactionData.redirect] - 'yes' | 'no'
+   * @param {string|boolean} [transactionData.keep_return_url] - 'True' | 'False'
+   * @param {boolean} [transactionData.is_sandbox] - Use sandbox environment
+   * @param {boolean} [transactionData.isSandbox] - Alias for is_sandbox
+   * @returns {Promise<Object>}
+   */
   async makeCIBTransaction(transactionData) {
-    return this._makeCIBRequest(transactionData, false);
+    const isSandbox = Boolean(
+      transactionData?.is_sandbox !== undefined ? transactionData.is_sandbox :
+      transactionData?.isSandbox !== undefined ? transactionData.isSandbox :
+      this.isSandbox
+    );
+    return this._makeCIBRequest(transactionData, isSandbox);
   }
 
   /**
@@ -457,6 +481,9 @@ class SofizPaySDK {
   }
 
   async _makeCIBRequest(transactionData, useSandbox) {
+    if (!transactionData) {
+      throw new Error('Transaction data is required.');
+    }
     if (!transactionData.account) {
       throw new Error('Account is required.');
     }
@@ -474,7 +501,8 @@ class SofizPaySDK {
     }
 
     try {
-      const baseUrl = useSandbox 
+      const isSandbox = Boolean(useSandbox !== undefined ? useSandbox : this.isSandbox);
+      const baseUrl = isSandbox 
         ? 'https://sofizpay.com/sandbox/make-cib-transaction/'
         : 'https://www.sofizpay.com/make-cib-transaction/';
       const params = new URLSearchParams();
@@ -488,11 +516,27 @@ class SofizPaySDK {
       if (transactionData.return_url) {
         params.append('return_url', transactionData.return_url);
       }
+      if (transactionData.webhook_url) {
+        params.append('webhook_url', transactionData.webhook_url);
+      }
+      if (transactionData.invoice_id) {
+        params.append('invoice_id', transactionData.invoice_id);
+      }
+      if (transactionData.language) {
+        params.append('language', transactionData.language);
+      }
       if (transactionData.memo) {
         params.append('memo', transactionData.memo);
       }
       if (transactionData.redirect !== undefined) {
-        params.append('redirect', transactionData.redirect);
+        params.append('redirect', typeof transactionData.redirect === 'boolean'
+          ? (transactionData.redirect ? 'yes' : 'no')
+          : transactionData.redirect);
+      }
+      if (transactionData.keep_return_url !== undefined) {
+        params.append('keep_return_url', typeof transactionData.keep_return_url === 'boolean'
+          ? (transactionData.keep_return_url ? 'True' : 'False')
+          : transactionData.keep_return_url);
       }
 
       const fullUrl = `${baseUrl}?${params.toString()}`;
@@ -503,20 +547,38 @@ class SofizPaySDK {
           'Content-Type': 'application/json'
         }
       });
+
+      const responseData = response.data;
+      const paymentUrl = responseData?.payment_url || responseData?.cib_response?.formUrl || null;
+
       return {
-        success: true,
-        data: response.data,
+        success: responseData?.status !== 'error' && responseData?.success !== false,
+        data: responseData,
+        payment_url: paymentUrl,
+        transaction_id: responseData?.transaction_id || null,
+        cib_transaction_id: responseData?.cib_transaction_id || null,
+        order_id: responseData?.order_id || null,
+        webhook_url: responseData?.webhook_url || transactionData.webhook_url || null,
+        account: transactionData.account,
+        amount: transactionData.amount,
+        full_name: transactionData.full_name,
+        phone: transactionData.phone,
+        email: transactionData.email,
+        memo: transactionData.memo,
+        is_sandbox: isSandbox,
         timestamp: new Date().toISOString()
       };
     } catch (error) {
       console.error('Error making CIB transaction:', error);
       
       let errorMessage = error.message;
+      let errorData = null;
       
       if (error.response) {
+        errorData = error.response.data;
         errorMessage = `HTTP Error: ${error.response.status} - ${error.response.statusText}`;
-        if (error.response.data && error.response.data.error) {
-          errorMessage += ` - ${error.response.data.error}`;
+        if (error.response.data && (error.response.data.message || error.response.data.error)) {
+          errorMessage += ` - ${error.response.data.message || error.response.data.error}`;
         }
       } else if (error.request) {
         errorMessage = 'Network error: No response received from server';
@@ -527,6 +589,7 @@ class SofizPaySDK {
       return {
         success: false,
         error: errorMessage,
+        errorData: errorData,
         account: transactionData.account,
         amount: transactionData.amount,
         timestamp: new Date().toISOString()
@@ -655,10 +718,12 @@ class SofizPaySDK {
 
   /**
    * Check status of a CIB transaction (Sandbox/Prod)
-   * @param {string} orderNumber 
+   * @param {string} cibTransactionId 
+   * @param {boolean} [isSandbox] - Explicit sandbox override
    */
-  async checkCIBStatus(cibTransactionId) {
-    return this._checkCIBStatusRequest(cibTransactionId, false);
+  async checkCIBStatus(cibTransactionId, isSandbox) {
+    const useSandbox = Boolean(isSandbox !== undefined ? isSandbox : this.isSandbox);
+    return this._checkCIBStatusRequest(cibTransactionId, useSandbox);
   }
 
   /**
@@ -667,7 +732,7 @@ class SofizPaySDK {
    * @returns {Promise<Object>}
    */
   async checkSandboxCIBStatus(cibTransactionId) {
-    return this._checkCIBStatusRequest(cibTransactionId, true);
+    return this.checkCIBStatus(cibTransactionId, true);
   }
 
   async _checkCIBStatusRequest(cibTransactionId, useSandbox) {
@@ -708,11 +773,25 @@ class SofizPaySDK {
     };
   }
 
-  verifySignature(verificationData) {
-    if (!verificationData.message) {
-      return false;
+  /**
+   * Verify digital RSA signature of a callback / webhook notification
+   * @param {Object|string} verificationData - Payload object or message string
+   * @param {string} [signature] - Signature string if verificationData is message
+   * @returns {boolean} - True if signature is valid
+   */
+  verifySignature(verificationData, signature) {
+    let message = '';
+    let sig = '';
+
+    if (typeof verificationData === 'string') {
+      message = verificationData;
+      sig = signature || '';
+    } else if (verificationData && typeof verificationData === 'object') {
+      message = verificationData.message || '';
+      sig = verificationData.signature_url_safe || verificationData.signature || '';
     }
-    if (!verificationData.signature_url_safe) {
+
+    if (!message || !sig) {
       return false;
     }
 
@@ -727,7 +806,7 @@ THV3WRcKrP2krz3ruRGF6yP6PVHEuPc0YDLsYjV5uhfs7JtIksNKhRRAQ16bAsj/
 -----END PUBLIC KEY-----`;
 
     try {
-      let base64 = verificationData.signature_url_safe
+      let base64 = sig
         .replace(/-/g, '+')
         .replace(/_/g, '/');
       
@@ -736,18 +815,24 @@ THV3WRcKrP2krz3ruRGF6yP6PVHEuPc0YDLsYjV5uhfs7JtIksNKhRRAQ16bAsj/
       }
       
       const signatureBytes = forge.util.decode64(base64);
-      
       const publicKey = forge.pki.publicKeyFromPem(publicKeyPem);
-      
       const md = forge.md.sha256.create();
-      md.update(verificationData.message, 'utf8');
+      md.update(message, 'utf8');
       
       return publicKey.verify(md.digest().bytes(), signatureBytes);
-      
     } catch (error) {
       console.error('Signature verification error:', error);
       return false;
     }
+  }
+
+  /**
+   * Helper method specifically to verify incoming webhook payloads
+   * @param {Object} webhookPayload - Webhook payload object containing message and signature
+   * @returns {boolean} - True if signature is valid
+   */
+  verifyWebhookSignature(webhookPayload) {
+    return this.verifySignature(webhookPayload);
   }
 }
 

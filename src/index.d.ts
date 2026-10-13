@@ -121,27 +121,62 @@ export interface CIBTransactionData {
   phone: string;
   email: string;
   return_url?: string;
+  webhook_url?: string;
+  invoice_id?: string;
+  language?: string;
   memo?: string;
-  redirect?: string;
+  redirect?: string | boolean;
+  keep_return_url?: string | boolean;
+  is_sandbox?: boolean;
+  isSandbox?: boolean;
 }
 
 export interface CIBTransactionResult {
   success: boolean;
   data?: any;
   url?: string;
+  payment_url?: string | null;
+  transaction_id?: string | null;
+  cib_transaction_id?: string | null;
+  order_id?: string | null;
+  webhook_url?: string | null;
   account: string;
   amount: number;
   full_name: string;
   phone: string;
   email: string;
   memo?: string;
+  is_sandbox?: boolean;
   error?: string;
+  errorData?: any;
   timestamp: string;
+}
+
+export interface WebhookPayload {
+  event?: string;
+  payment_status: 'success' | 'failed' | string;
+  transaction_id?: string;
+  cib_transaction_id?: string;
+  order_id?: string;
+  order_number?: number | string;
+  order_status?: number | string;
+  amount?: number;
+  currency?: string;
+  error_code?: any;
+  error_message?: string | null;
+  action_code?: any;
+  action_code_description?: string | null;
+  resp_code?: string | null;
+  resp_code_desc?: string | null;
+  message: string;
+  signature?: string;
+  signature_url_safe?: string;
 }
 
 export interface SignatureVerificationData {
   message: string;
-  signature_url_safe: string;
+  signature?: string;
+  signature_url_safe?: string;
 }
 
 export interface SignatureVerificationResult {
@@ -164,7 +199,10 @@ export interface ServiceResult {
 }
 
 export default class SofizPaySDK {
-  constructor();
+  version: string;
+  isSandbox: boolean;
+
+  constructor(isSandbox?: boolean);
   
   submit(data: SubmitData): Promise<TransactionResult>;
   
@@ -186,6 +224,8 @@ export default class SofizPaySDK {
   
   makeCIBTransaction(transactionData: CIBTransactionData): Promise<CIBTransactionResult>;
 
+  makeSandboxCIBTransaction(transactionData: CIBTransactionData): Promise<CIBTransactionResult>;
+
   rechargePhone(data: any): Promise<ServiceResult>;
 
   rechargeInternet(data: any): Promise<ServiceResult>;
@@ -200,9 +240,13 @@ export default class SofizPaySDK {
 
   getProducts(encryptedSecretKey?: string): Promise<ServiceResult>;
 
-  checkCIBStatus(cibTransactionId: string): Promise<ServiceResult>;
+  checkCIBStatus(cibTransactionId: string, isSandbox?: boolean): Promise<ServiceResult>;
+
+  checkSandboxCIBStatus(cibTransactionId: string): Promise<ServiceResult>;
   
-  verifySignature(verificationData: SignatureVerificationData): boolean;
+  verifySignature(verificationData: SignatureVerificationData | WebhookPayload | string, signature?: string): boolean;
+
+  verifyWebhookSignature(webhookPayload: WebhookPayload | SignatureVerificationData): boolean;
   
   getVersion(): string;
 }
