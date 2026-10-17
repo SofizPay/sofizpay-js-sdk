@@ -623,13 +623,13 @@ const sdk = new SofizPaySDK(true); // Sandbox mode
 
 async function testSandboxPayment() {
   const result = await sdk.makeSandboxCIBTransaction({
-    account:     'GB3R3DRQXBPSC2XSFLPDRVCAVRCVJXAPJGBPMJ45JBRJC5QJPM7QTUSO', // Public key only
+    account:     'GXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX', // Public key only
     amount:      150.0,
     full_name:   'Sandbox Tester',
     phone:       '0661000000',
     email:       'sandbox@sofizpay.com',
     memo:        'Safe Sandbox Test',
-    webhook_url: 'https://webhook.site/your-unique-uuid',
+    webhook_url: 'https://your-domain.com/api/webhook',
     return_url:  'https://yourstore.com/checkout/success'
   });
 
@@ -660,7 +660,7 @@ if (!secretKey) {
 
 const payment = await sdk.submit({
   secretkey:            secretKey,
-  destinationPublicKey: 'GAQDKCQLIDIWWHDVDGJCA2K2QJB3JIQHREX4XJ6YTSUDQAZBCPTFGP27',
+  destinationPublicKey: 'GYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY',
   amount:               1.0,
   memo:                 'Test Safe Payment'
 });

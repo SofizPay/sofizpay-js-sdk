@@ -1,8 +1,8 @@
 (function (global, factory) {
-  typeof exports === 'object' && typeof module !== 'undefined' ? module.exports = factory(require('stellar-sdk'), require('axios'), require('https'), require('node-forge')) :
-  typeof define === 'function' && define.amd ? define(['stellar-sdk', 'axios', 'https', 'node-forge'], factory) :
-  (global = typeof globalThis !== 'undefined' ? globalThis : global || self, global.SofizPaySDK = factory(global.StellarSdk, global.axios, global.https, global.forge));
-})(this, (function (StellarSdk, axios, https, forge) { 'use strict';
+  typeof exports === 'object' && typeof module !== 'undefined' ? factory(exports, require('stellar-sdk'), require('axios'), require('https'), require('node-forge')) :
+  typeof define === 'function' && define.amd ? define(['exports', 'stellar-sdk', 'axios', 'https', 'node-forge'], factory) :
+  (global = typeof globalThis !== 'undefined' ? globalThis : global || self, factory(global.SofizPaySDK = {}, global.StellarSdk, global.axios, global.https, global.forge));
+})(this, (function (exports, StellarSdk, axios, https, forge) { 'use strict';
 
   function _interopNamespaceDefault(e) {
     var n = Object.create(null);
@@ -578,7 +578,23 @@
       }
     }
 
+    /**
+     * Alias for submit() supporting both object and direct argument forms
+     */
+    async sendPayment(secretOrData, destinationPublicKey, amount, memo) {
+      if (typeof secretOrData === 'object' && secretOrData !== null) {
+        return this.submit(secretOrData);
+      }
+      return this.submit({
+        secretkey: secretOrData,
+        destinationPublicKey,
+        amount,
+        memo
+      });
+    }
+
     async getTransactions(publicKey, limit = null, cursor = null) {
+
       if (!publicKey) {
         throw new Error('public Key is required.');
       }
@@ -1358,6 +1374,9 @@ THV3WRcKrP2krz3ruRGF6yP6PVHEuPc0YDLsYjV5uhfs7JtIksNKhRRAQ16bAsj/
     }
   }
 
-  return SofizPaySDK;
+  exports.SofizPaySDK = SofizPaySDK;
+  exports.default = SofizPaySDK;
+
+  Object.defineProperty(exports, '__esModule', { value: true });
 
 }));

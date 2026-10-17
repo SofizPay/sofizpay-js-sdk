@@ -5,9 +5,16 @@ export default {
   external: ['stellar-sdk', 'axios', 'node-forge'],
   output: [
     {
+      file: 'dist/sofizpay-sdk.cjs',
+      format: 'cjs',
+      exports: 'named',
+      footer: 'module.exports = Object.assign(SofizPaySDK, exports);'
+    },
+    {
       file: 'dist/sofizpay-sdk.cjs.js',
       format: 'cjs',
-      exports: 'auto'
+      exports: 'named',
+      footer: 'module.exports = Object.assign(SofizPaySDK, exports);'
     },
     {
       file: 'dist/sofizpay-sdk.esm.js',
@@ -17,7 +24,7 @@ export default {
       file: 'dist/sofizpay-sdk.umd.js',
       format: 'umd',
       name: 'SofizPaySDK',
-      exports: 'default',
+      exports: 'named',
       globals: {
         'stellar-sdk': 'StellarSdk',
         'axios': 'axios',

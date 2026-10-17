@@ -558,7 +558,23 @@ class SofizPaySDK {
     }
   }
 
+  /**
+   * Alias for submit() supporting both object and direct argument forms
+   */
+  async sendPayment(secretOrData, destinationPublicKey, amount, memo) {
+    if (typeof secretOrData === 'object' && secretOrData !== null) {
+      return this.submit(secretOrData);
+    }
+    return this.submit({
+      secretkey: secretOrData,
+      destinationPublicKey,
+      amount,
+      memo
+    });
+  }
+
   async getTransactions(publicKey, limit = null, cursor = null) {
+
     if (!publicKey) {
       throw new Error('public Key is required.');
     }
@@ -1338,4 +1354,4 @@ THV3WRcKrP2krz3ruRGF6yP6PVHEuPc0YDLsYjV5uhfs7JtIksNKhRRAQ16bAsj/
   }
 }
 
-export { SofizPaySDK as default };
+export { SofizPaySDK, SofizPaySDK as default };
