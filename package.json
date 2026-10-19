@@ -1,6 +1,6 @@
 {
   "name": "sofizpay-sdk-js",
-  "version": "1.1.11",
+  "version": "1.3.0",
   "type": "module",
   "description": "A comprehensive JavaScript SDK for secure digital payments and transactions",
   "main": "dist/sofizpay-sdk.cjs",
@@ -24,8 +24,7 @@
     "build": "rollup -c",
     "dev": "rollup -c -w",
     "test": "echo \"SDK built successfully. Refer to README.md for testing guidelines.\"",
-    "update-version": "chmod +x scripts/update-version.sh && ./scripts/update-version.sh patch",
-    "release": "npm run update-version && npm run build && npm publish"
+    "release": "npm run build && npm publish"
   },
   "keywords": [
     "payment",
@@ -46,11 +45,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/kenandarabeh/sofizpay-sdk.git"
+    "url": "https://github.com/SofizPay/sofizpay-js-sdk.git"
   },
-  "homepage": "https://github.com/kenandarabeh/sofizpay-sdk#readme",
+  "homepage": "https://github.com/SofizPay/sofizpay-js-sdk#readme",
   "bugs": {
-    "url": "https://github.com/kenandarabeh/sofizpay-sdk/issues"
+    "url": "https://github.com/SofizPay/sofizpay-js-sdk/issues"
   },
   "engines": {
     "node": ">=16.0.0"

@@ -4,7 +4,7 @@ import forge from 'node-forge';
 
 class SofizPaySDK {
   constructor(isSandbox = false) {
-    this.version = '1.1.11';
+    this.version = '1.3.0';
     this.isSandbox = isSandbox;
     this.activeStreams = new Map();
     this.transactionCallbacks = new Map();

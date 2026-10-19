@@ -1,10 +1,10 @@
 <div align="center">
-  <img src="https://github.com/kenandarabeh/sofizpay-sdk/blob/main/assets/sofizpay-logo.png?raw=true" alt="SofizPay Logo" width="200" />
+  <img src="https://github.com/SofizPay/sofizpay-js-sdk/blob/main/assets/sofizpay-logo.png?raw=true" alt="SofizPay Logo" width="200" />
 
   <h2>SofizPay JavaScript SDK</h2>
   <p><strong>The official JavaScript/TypeScript SDK for secure digital payments on the SofizPay platform.</strong></p>
 
-  [![npm version](https://badge.fury.io/js/sofizpay-sdk-js.svg)](https://www.npmjs.com/package/sofizpay-sdk)
+  [![npm version](https://badge.fury.io/js/sofizpay-sdk-js.svg)](https://www.npmjs.com/package/sofizpay-sdk-js)
   [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
   [![Node.js](https://img.shields.io/badge/Node.js-16%2B-green.svg)](https://nodejs.org/)
 </div>
@@ -14,7 +14,7 @@
 ## 📋 Table of Contents
 
 - [Overview](#overview)
-- [What's New in v1.1.11](#-whats-new-in-v1111)
+- [What's New in v1.3.0](#-whats-new-in-v130)
 - [Installation](#installation)
 - [Quick Start](#quick-start)
 - [Core Methods](#core-methods)
@@ -49,9 +49,9 @@ The SofizPay JS SDK is a full-featured library for integrating **DZT digital pay
 
 ---
 
-## 🆕 What's New in v1.1.11
+## 🆕 What's New in v1.3.0
 
-SofizPay JS SDK v1.1.11 brings full official support for **Sandbox Bank Simulations** and **Real-Time Asynchronous Webhooks**:
+SofizPay JS SDK v1.3.0 brings full official support for **Sandbox Bank Simulations** and **Real-Time Asynchronous Webhooks**:
 
 | Feature | Details | Status |
 |---------|---------|--------|
