@@ -4,17 +4,8 @@ node_modules/
 .DS_Store
 coverage/
 .nyc_output/
-test.*
-.gitignore
 *.tgz
 *.swp
-./package-lock.json
 *.swo
-.npmignore
-.yarn-integrity
-test.*
-.gitignore
-package-lock.json
 test-complete.html
-CHANGELOG.md
 scripts/
