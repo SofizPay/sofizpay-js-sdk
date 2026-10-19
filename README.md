@@ -4,7 +4,7 @@
   <h2>SofizPay JavaScript SDK</h2>
   <p><strong>The official JavaScript/TypeScript SDK for secure digital payments on the SofizPay platform.</strong></p>
 
-  [![npm version](https://badge.fury.io/js/sofizpay-sdk-js.svg)](https://www.npmjs.com/package/sofizpay-sdk-js)
+  [![npm version](https://badge.fury.io/js/sofizpay-js-sdk.svg)](https://www.npmjs.com/package/sofizpay-js-sdk)
   [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
   [![Node.js](https://img.shields.io/badge/Node.js-16%2B-green.svg)](https://nodejs.org/)
 </div>
@@ -71,9 +71,9 @@ SofizPay JS SDK v1.3.0 brings full official support for **Sandbox Bank Simulatio
 ### npm / yarn
 
 ```bash
-npm install sofizpay-sdk-js
+npm install sofizpay-js-sdk
 # or
-yarn add sofizpay-sdk-js
+yarn add sofizpay-js-sdk
 ```
 
 ### Browser (CDN)
@@ -83,7 +83,7 @@ Load the following scripts in order before the SDK:
 ```html
 <script src="https://unpkg.com/stellar-sdk@12.3.0/dist/stellar-sdk.min.js"></script>
 <script src="https://unpkg.com/axios@1.10.0/dist/axios.min.js"></script>
-<script src="https://unpkg.com/sofizpay-sdk-js@latest/dist/sofizpay-sdk.umd.js"></script>
+<script src="https://unpkg.com/sofizpay-js-sdk@latest/dist/sofizpay-js-sdk.umd.js"></script>
 ```
 
 ---
@@ -91,7 +91,7 @@ Load the following scripts in order before the SDK:
 ## 🚀 Quick Start
 
 ```javascript
-import SofizPaySDK from 'sofizpay-sdk-js';
+import SofizPaySDK from 'sofizpay-js-sdk';
 
 const sdk = new SofizPaySDK();
 
@@ -407,7 +407,7 @@ Generate a secure Dahabia/CIB bank payment link with optional real-time webhook 
 ### Production Example
 
 ```javascript
-import SofizPaySDK from 'sofizpay-sdk-js';
+import SofizPaySDK from 'sofizpay-js-sdk';
 
 const sdk = new SofizPaySDK(); // Production instance
 
@@ -537,7 +537,7 @@ Always verify the RSA signature before updating databases to ensure authenticity
 
 ```javascript
 import express from 'express';
-import SofizPaySDK from 'sofizpay-sdk-js';
+import SofizPaySDK from 'sofizpay-js-sdk';
 
 const app = express();
 app.use(express.json());
@@ -569,7 +569,7 @@ app.post('/api/cib-webhook', (req, res) => {
 
 ```javascript
 import { NextResponse } from 'next/server';
-import SofizPaySDK from 'sofizpay-sdk-js';
+import SofizPaySDK from 'sofizpay-js-sdk';
 
 const sdk = new SofizPaySDK();
 
@@ -617,7 +617,7 @@ You do **not** need a private/secret key to test bank checkout links, mock cards
 
 ```javascript
 // test_sandbox.js
-import SofizPaySDK from 'sofizpay-sdk-js';
+import SofizPaySDK from 'sofizpay-js-sdk';
 
 const sdk = new SofizPaySDK(true); // Sandbox mode
 
@@ -647,7 +647,7 @@ testSandboxPayment();
 
 ```javascript
 // test_payment.js
-import SofizPaySDK from 'sofizpay-sdk-js';
+import SofizPaySDK from 'sofizpay-js-sdk';
 
 const sdk = new SofizPaySDK();
 
@@ -803,7 +803,7 @@ async function chargeOrder(orderId, customerKey, amount) {
 
 ```jsx
 import { useState, useEffect } from 'react';
-import SofizPaySDK from 'sofizpay-sdk-js';
+import SofizPaySDK from 'sofizpay-js-sdk';
 
 const sdk = new SofizPaySDK();
 
@@ -840,9 +840,9 @@ await sdk.startTransactionStream(userPublicKey, (tx) => {
 ## 📞 Support
 
 - 🌐 **Website**: [SofizPay.com](https://sofizpay.com)
-- 📚 **Full Docs**: [GitHub Repository](https://github.com/kenandarabeh/sofizpay-sdk#readme)
-- 🐛 **Bug Reports**: [Open an Issue](https://github.com/kenandarabeh/sofizpay-sdk/issues)
-- 💬 **Discussions**: [Community Forum](https://github.com/kenandarabeh/sofizpay-sdk/discussions)
+- 📚 **Full Docs**: [GitHub Repository](https://github.com/kenandarabeh/sofizpay-js-sdk#readme)
+- 🐛 **Bug Reports**: [Open an Issue](https://github.com/kenandarabeh/sofizpay-js-sdk/issues)
+- 💬 **Discussions**: [Community Forum](https://github.com/kenandarabeh/sofizpay-js-sdk/discussions)
 
 ---
 
