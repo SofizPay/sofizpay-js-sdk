@@ -267,7 +267,8 @@ if (tx.success && tx.found) {
 | `makeSandboxCIBTransaction(data)` | See CIB section | `CIBResult` | Create sandbox bank payment link |
 | `checkCIBStatus(cibTransactionId, isSandbox?)` | `string, boolean?` | `ServiceResult` | Check CIB order status |
 | `checkSandboxCIBStatus(cibTransactionId)` | `string` | `ServiceResult` | Check sandbox CIB order status |
-| `verifyWebhookSignature(payload)` | `WebhookPayload` | `boolean` | Verify RSA SHA-256 webhook signature |
+| `verifyWebhookPayload(payload, options?)` | `WebhookPayload, { callbackUrl? }` | `boolean` | **Recommended.** Verify signature and that `payment_status` / `amount` / `order_number` match the signed message |
+| `verifyWebhookSignature(payload)` | `WebhookPayload` | `boolean` | Verify RSA SHA-256 webhook signature over `message` only |
 | `verifySignature(data, signature?)` | `string \| object, string?` | `boolean` | Low-level RSA signature verification |
 | `rechargePhone(data)` | `{encrypted_sk, phone, operator, amount, offer}` | `ServiceResult` | Phone recharge |
 | `rechargeInternet(data)` | `{encrypted_sk, phone, amount, offer}` | `ServiceResult` | Internet recharge |
@@ -529,9 +530,20 @@ When a payment succeeds or fails, SofizPay delivers a server-to-server asynchron
 | `message` | `string` | Signed string representation of transaction data |
 | `signature` | `string` | RSA SHA-256 digital signature from SofizPay |
 
-### Verifying Signatures (`verifyWebhookSignature`)
+### Verifying Webhooks (`verifyWebhookPayload`)
 
-Always verify the RSA signature before updating databases to ensure authenticity:
+Always verify the webhook before updating databases to ensure authenticity.
+
+> ⚠️ **Use `verifyWebhookPayload`, not only `verifyWebhookSignature`.** The RSA signature covers only the
+> `message` string (`callback_url + payment_status + amount + order_number`). The top-level fields such as
+> `payment_status`, `amount` and `order_number` are **not** signed by themselves. `verifyWebhookPayload`
+> checks the signature **and** that those fields match the signed `message`, so they can be trusted.
+> `verifyWebhookSignature` alone does not, and an attacker could change them.
+
+Recommended hardening:
+- Pass `{ callbackUrl }`, the URL prefix exactly as it appears at the start of `message` in a real webhook (including any trailing `/`), for an exact match.
+- Check that `amount` equals the amount you stored for that order.
+- Process each order only once (webhooks can be replayed).
 
 #### Express.js Implementation:
 
@@ -547,8 +559,10 @@ const sdk = new SofizPaySDK();
 app.post('/api/cib-webhook', (req, res) => {
   const payload = req.body;
 
-  // 1. Verify the digital signature
-  const isValid = sdk.verifyWebhookSignature(payload);
+  // 1. Verify the signature AND that payment_status / amount / order_number match the signed message
+  const isValid = sdk.verifyWebhookPayload(payload, {
+    callbackUrl: 'https://yourstore.com/api/cib-webhook/' // optional, recommended
+  });
   if (!isValid) {
     return res.status(400).send('Invalid signature');
   }
@@ -576,8 +590,8 @@ const sdk = new SofizPaySDK();
 export async function POST(request) {
   const payload = await request.json();
 
-  // Validate official signature
-  if (!sdk.verifyWebhookSignature(payload)) {
+  // Validate signature + signed fields
+  if (!sdk.verifyWebhookPayload(payload)) {
     return NextResponse.json({ error: 'Unauthorized signature' }, { status: 400 });
   }
 

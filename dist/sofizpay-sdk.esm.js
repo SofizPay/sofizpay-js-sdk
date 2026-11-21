@@ -506,7 +506,7 @@ const getTransactionByHash = async (transactionHash) => {
 
 class SofizPaySDK {
   constructor(isSandbox = false) {
-    this.version = '1.3.0';
+    this.version = '1.4.0';
     this.isSandbox = isSandbox;
     this.activeStreams = new Map();
     this.transactionCallbacks = new Map();
@@ -1351,6 +1351,49 @@ THV3WRcKrP2krz3ruRGF6yP6PVHEuPc0YDLsYjV5uhfs7JtIksNKhRRAQ16bAsj/
    */
   verifyWebhookSignature(webhookPayload) {
     return this.verifySignature(webhookPayload);
+  }
+
+  /**
+   * Verify a CIB webhook end to end: the RSA signature over `message` AND that the
+   * unsigned top-level fields (`payment_status`, `amount`, `order_number`) match the
+   * signed `message`. Use this before trusting any of those fields.
+   *
+   * The signed message is `callbackUrl + payment_status + amount + order_number`.
+   * Pass `callbackUrl` (your webhook URL as registered with SofizPay) for the strictest check.
+   *
+   * @param {Object} webhookPayload - Parsed webhook JSON body
+   * @param {Object} [options]
+   * @param {string} [options.callbackUrl] - Your webhook URL; when given, the message must match it exactly
+   * @returns {boolean} - True only if the signature is valid and the fields are consistent
+   */
+  verifyWebhookPayload(webhookPayload, options = {}) {
+    if (!webhookPayload || typeof webhookPayload !== 'object') {
+      return false;
+    }
+    if (!this.verifyWebhookSignature(webhookPayload)) {
+      return false;
+    }
+
+    const toPart = (value) => {
+      if (typeof value === 'string') return value;
+      if (typeof value === 'number' && Number.isSafeInteger(value)) return String(value);
+      return null;
+    };
+
+    const status = toPart(webhookPayload.payment_status);
+    const amount = toPart(webhookPayload.amount);
+    const orderNumber = toPart(webhookPayload.order_number);
+    if (!status || !amount || !orderNumber) {
+      return false;
+    }
+
+    const signedFields = status + amount + orderNumber;
+    const message = webhookPayload.message;
+    const { callbackUrl } = options || {};
+    if (typeof callbackUrl === 'string' && callbackUrl.length > 0) {
+      return message === callbackUrl + signedFields;
+    }
+    return message.length > signedFields.length && message.endsWith(signedFields);
   }
 }
 

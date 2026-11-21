@@ -247,6 +247,12 @@ export default class SofizPaySDK {
   verifySignature(verificationData: SignatureVerificationData | WebhookPayload | string, signature?: string): boolean;
 
   verifyWebhookSignature(webhookPayload: WebhookPayload | SignatureVerificationData): boolean;
-  
+
+  /**
+   * Verifies the signature AND that payment_status / amount / order_number match the signed message.
+   * Use this before trusting those fields.
+   */
+  verifyWebhookPayload(webhookPayload: WebhookPayload, options?: { callbackUrl?: string }): boolean;
+
   getVersion(): string;
 }
