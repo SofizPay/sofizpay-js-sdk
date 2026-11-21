@@ -526,7 +526,7 @@
 
   class SofizPaySDK {
     constructor(isSandbox = false) {
-      this.version = '1.4.0';
+      this.version = '1.4.1';
       this.isSandbox = isSandbox;
       this.activeStreams = new Map();
       this.transactionCallbacks = new Map();
@@ -1378,15 +1378,15 @@ THV3WRcKrP2krz3ruRGF6yP6PVHEuPc0YDLsYjV5uhfs7JtIksNKhRRAQ16bAsj/
      * unsigned top-level fields (`payment_status`, `amount`, `order_number`) match the
      * signed `message`. Use this before trusting any of those fields.
      *
-     * The signed message is `callbackUrl + payment_status + amount + order_number`.
-     * Pass `callbackUrl` (your webhook URL as registered with SofizPay) for the strictest check.
+     * The signed message is exactly `"cib" + payment_status + amount + order_number`
+     * (e.g. `cibsuccess50004790895316`), verified against real sandbox and production webhooks.
      *
      * @param {Object} webhookPayload - Parsed webhook JSON body
-     * @param {Object} [options]
-     * @param {string} [options.callbackUrl] - Your webhook URL; when given, the message must match it exactly
+     * @param {Object} [options] - Deprecated, ignored. `callbackUrl` is not part of the signed message;
+     *   it is accepted only so that code written for 1.4.0 keeps working.
      * @returns {boolean} - True only if the signature is valid and the fields are consistent
      */
-    verifyWebhookPayload(webhookPayload, options = {}) {
+    verifyWebhookPayload(webhookPayload, options = {}) { // eslint-disable-line no-unused-vars
       if (!webhookPayload || typeof webhookPayload !== 'object') {
         return false;
       }
@@ -1407,13 +1407,7 @@ THV3WRcKrP2krz3ruRGF6yP6PVHEuPc0YDLsYjV5uhfs7JtIksNKhRRAQ16bAsj/
         return false;
       }
 
-      const signedFields = status + amount + orderNumber;
-      const message = webhookPayload.message;
-      const { callbackUrl } = options || {};
-      if (typeof callbackUrl === 'string' && callbackUrl.length > 0) {
-        return message === callbackUrl + signedFields;
-      }
-      return message.length > signedFields.length && message.endsWith(signedFields);
+      return webhookPayload.message === 'cib' + status + amount + orderNumber;
     }
   }
 

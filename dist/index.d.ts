@@ -249,10 +249,11 @@ export default class SofizPaySDK {
   verifyWebhookSignature(webhookPayload: WebhookPayload | SignatureVerificationData): boolean;
 
   /**
-   * Verifies the signature AND that payment_status / amount / order_number match the signed message.
-   * Use this before trusting those fields.
+   * Verifies the signature AND that the signed message is exactly
+   * "cib" + payment_status + amount + order_number. Use this before trusting those fields.
+   * @param options Deprecated and ignored (`callbackUrl` is not part of the signed message).
    */
-  verifyWebhookPayload(webhookPayload: WebhookPayload, options?: { callbackUrl?: string }): boolean;
+  verifyWebhookPayload(webhookPayload: WebhookPayload, options?: { /** @deprecated ignored */ callbackUrl?: string }): boolean;
 
   getVersion(): string;
 }

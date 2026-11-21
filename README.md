@@ -267,7 +267,7 @@ if (tx.success && tx.found) {
 | `makeSandboxCIBTransaction(data)` | See CIB section | `CIBResult` | Create sandbox bank payment link |
 | `checkCIBStatus(cibTransactionId, isSandbox?)` | `string, boolean?` | `ServiceResult` | Check CIB order status |
 | `checkSandboxCIBStatus(cibTransactionId)` | `string` | `ServiceResult` | Check sandbox CIB order status |
-| `verifyWebhookPayload(payload, options?)` | `WebhookPayload, { callbackUrl? }` | `boolean` | **Recommended.** Verify signature and that `payment_status` / `amount` / `order_number` match the signed message |
+| `verifyWebhookPayload(payload)` | `WebhookPayload` | `boolean` | **Recommended.** Verify signature and that `payment_status` / `amount` / `order_number` match the signed message |
 | `verifyWebhookSignature(payload)` | `WebhookPayload` | `boolean` | Verify RSA SHA-256 webhook signature over `message` only |
 | `verifySignature(data, signature?)` | `string \| object, string?` | `boolean` | Low-level RSA signature verification |
 | `rechargePhone(data)` | `{encrypted_sk, phone, operator, amount, offer}` | `ServiceResult` | Phone recharge |
@@ -498,7 +498,7 @@ When a payment succeeds or fails, SofizPay delivers a server-to-server asynchron
   "transaction_id": "bb979126-4e55-49dd-8ecc-a1d59867d2b0",
   "cib_transaction_id": "5965287001",
   "order_id": "satim_order_a1b2c3d4",
-  "order_number": 5965287001,
+  "order_number": "5965287001",
   "order_status": 2,
   "amount": 150000,
   "currency": "012",
@@ -508,7 +508,7 @@ When a payment succeeds or fails, SofizPay delivers a server-to-server asynchron
   "action_code_description": null,
   "resp_code": "00",
   "resp_code_desc": "Approved",
-  "message": "https://yourstore.com/api/cib-webhook/success1500005965287001",
+  "message": "cibsuccess1500005965287001",
   "signature": "MEQCIFz8v982hfkjdsf983274hfkjsdf...=="
 }
 ```
@@ -535,13 +535,12 @@ When a payment succeeds or fails, SofizPay delivers a server-to-server asynchron
 Always verify the webhook before updating databases to ensure authenticity.
 
 > ⚠️ **Use `verifyWebhookPayload`, not only `verifyWebhookSignature`.** The RSA signature covers only the
-> `message` string (`callback_url + payment_status + amount + order_number`). The top-level fields such as
+> `message` string (`"cib" + payment_status + amount + order_number`, e.g. `cibsuccess1500005965287001`). The top-level fields such as
 > `payment_status`, `amount` and `order_number` are **not** signed by themselves. `verifyWebhookPayload`
 > checks the signature **and** that those fields match the signed `message`, so they can be trusted.
 > `verifyWebhookSignature` alone does not, and an attacker could change them.
 
 Recommended hardening:
-- Pass `{ callbackUrl }`, the URL prefix exactly as it appears at the start of `message` in a real webhook (including any trailing `/`), for an exact match.
 - Check that `amount` equals the amount you stored for that order.
 - Process each order only once (webhooks can be replayed).
 
@@ -560,9 +559,7 @@ app.post('/api/cib-webhook', (req, res) => {
   const payload = req.body;
 
   // 1. Verify the signature AND that payment_status / amount / order_number match the signed message
-  const isValid = sdk.verifyWebhookPayload(payload, {
-    callbackUrl: 'https://yourstore.com/api/cib-webhook/' // optional, recommended
-  });
+  const isValid = sdk.verifyWebhookPayload(payload);
   if (!isValid) {
     return res.status(400).send('Invalid signature');
   }
